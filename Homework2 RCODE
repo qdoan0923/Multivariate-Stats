@@ -1,0 +1,185 @@
+# Install the required packages
+library(corrplot)
+library(PerformanceAnalytics)
+library(car)
+
+# Read in csv data about drug attitudes
+WB<-read.csv('/Users/quintdoan/Documents/Yale/Spring 2021/Multivariate/carnivoradataset.csv')
+#WB<-pantheria
+names(WB)	
+
+
+#Get subset of data that is complete for relevant variables	
+WB2 <- WB[ ,c("Species.name","BodyMass.g","LitSz","MaxLifepsan.m","HabitatBreadth",
+"AdultHeadBodyLen.mm","DietBreadth","GestLen.d","WeanAge.d")]
+
+#We need complete cases for code to work	
+WB2<- WB2[complete.cases(WB2), ]	
+dim(WB2)
+
+
+# For starters, make correlation matrices and use visual representations.	
+
+#make correlation matrix to see if PCA will work well - remove column of species names	
+round(cor(WB2[, -1]), 2)	
+
+#Cooler visual representation of correlations	
+corrplot(cor(WB2[, -1]), method = "ellipse")	
+
+#Cooler visual representation of correlations	
+#Order option orders variables based on data order, alphabetically, results of cluster analysis, etc.	
+#  See help file or link above to get details.	
+
+corrplot(cor(WB2[,-1]),method = "ellipse", order="FPC")	
+corrplot(cor(WB2[,-1]),method = "ellipse", order="AOE")	
+corrplot(cor(WB2[,-1]),method = "ellipse", order="hclust")	
+
+#Lots of options here - but my personal favorite	
+corrplot.mixed(cor(WB2[,-1]), lower.col = "black", upper = "ellipse", tl.col = "black", number.cex = .7, order = "hclust", tl.pos = "lt", tl.cex = .7)	
+
+
+# It's also important to check for linearity.	
+
+#make matrix plot to check for linearity	
+plot(WB2[,-1], pch = 19, cex = .7, col = 'red', main = "Matrix plot of WB raw data")	
+
+#Here is a cool way to look for non-linearity, get correlation, make histograms all at once.	
+chart.Correlation(WB2[, -1], histogram = TRUE, pch = 19)	
+
+
+# Let's see if data happens to have multivariate normal distribution (not required but handy for parallel analysis)	
+
+#get online function	
+source("http://www.reuningscherer.net/multivariate/R/CSQPlot.r.txt")	
+
+#run the function	
+CSQPlot(WB2[,-1],label="Carnivora Data")	
+
+#It does not, lets assess where the non-normality lies
+
+#Get a normal quantile plot of for the eight variables, raw scale
+qqPlot(WB2$BodyMass.g, col = 'red', pch = 19)	
+qqPlot(WB2$LitSz, col = 'red', pch = 19)	
+qqPlot(WB2$MaxLifepsan.m, col = 'red', pch = 19)	
+qqPlot(WB2$HabitatBreadth, col = 'red', pch = 19)	
+qqPlot(WB2$AdultHeadBodyLen.mm, col = 'red', pch = 19)	
+qqPlot(WB2$DietBreadth, col = 'red', pch = 19)	
+qqPlot(WB2$GestLen.d, col = 'red', pch = 19)
+qqPlot(WB2$WeanAge.d, col = 'red', pch = 19)
+
+#perform the relevant transformation
+WB2$LogBodyMass.g=log(WB2$BodyMass.g)
+#Display normal quantile plot
+qqPlot(WB2$LogBodyMass.g, col = 'red', pch = 19)
+#perform the relevant transformation
+WB2$LogLitSz=log(WB2$LitSz)
+#Display normal quantile plot
+qqPlot(WB2$LogLitSz, col = 'red', pch = 19)
+#perform the relevant transformation
+WB2$LogMaxLifepsan.m=log(WB2$MaxLifepsan.m)
+#Display normal quantile plot
+qqPlot(WB2$LogMaxLifepsan.m, col = 'red', pch = 19)	
+#perform the relevant transformation
+WB2$LogAdultHeadBodylen.mm=log(WB2$AdultHeadBodyLen.mm)
+#Display normal quantile plot
+qqPlot(WB2$LogAdultHeadBodylen.mm, col = 'red', pch = 19)
+#perform the relevant transformation
+WB2$LogDietBreadth=log(WB2$DietBreadth)
+#Display normal quantile plot
+qqPlot(WB2$LogDietBreadth, col = 'red', pch = 19)
+#perform the relevant transformation
+WB2$LogGestLen.d=log(WB2$GestLen.d)
+#Display normal quantile plot
+qqPlot(WB2$LogGestLen.d, col = 'red', pch = 19)
+#perform the relevant transformation
+WB2$LogWeanAge.d=log(WB2$WeanAge.d)
+#Display normal quantile plot
+qqPlot(WB2$LogWeanAge.d, col = 'red', pch = 19)	
+
+#Add the columns to a new matrix of transformed data
+WB2.T <- WB2[ ,c("Species.name","LogBodyMass.g","LogLitSz","LogMaxLifepsan.m","HabitatBreadth",
+              "LogAdultHeadBodylen.mm","LogDietBreadth","LogGestLen.d","LogWeanAge.d")]
+
+#Check for a multivariate normal distribution
+CSQPlot(WB2.T[,-1],label="Carnivora Data Transformed")
+
+#make correlation matrix to see if PCA will work well - remove column of country names	
+round(cor(WB2.T[, -1]), 2)
+
+
+#Cooler visual representation of correlations	
+corrplot(cor(WB2[, -1]), method = "ellipse")	
+
+#Cooler visual representation of correlations	
+#Order option orders variables based on data order, alphabetically, results of cluster analysis, etc.	
+#  See help file or link above to get details.	
+
+corrplot(cor(WB2.T[,-1]),method = "ellipse", order="FPC")	
+corrplot(cor(WB2.T[,-1]),method = "ellipse", order="AOE")	
+corrplot(cor(WB2.T[,-1]),method = "ellipse", order="hclust")	
+
+#Lots of options here - but my personal favorite	
+corrplot.mixed(cor(WB2.T[,-1]), lower.col = "black", upper = "ellipse", tl.col = "black", number.cex = .7, order = "hclust", tl.pos = "lt", tl.cex = .7)	
+
+
+# ####  RUN PCA ON TRANSFORMED DATA	
+
+#This PCA is standardized.
+
+pc1_trans <- princomp(WB2.T[, -1], cor = TRUE)	
+
+#print results	
+print(summary(pc1_trans), digits = 2, loadings = pc1_trans$loadings, cutoff = 0)	
+
+#Get eigenvalues	
+round(pc1_trans$sdev^2, 2)	
+
+#make a screeplot  	
+screeplot(pc1_trans, type = "lines", col = "red", lwd = 2, pch = 19, cex = 1.2, 	
+          main = "Scree Plot of Transformed Data")	
+
+#perform parallel analysis	
+#get the function online	
+source("http://www.reuningscherer.net/multivariate/R/parallel.r.txt")	
+
+#make the parallel analysis plot	
+parallelplot(pc1_trans)	
+
+#make scoreplot with confidence ellipse : 	
+#  c(1,2) specifies to use components 1 and 2	
+#get function from online	
+#source("http://reuningscherer.net/multivariate/r/ciscoreplot.R.txt")	
+#make score plot with confidence ellipse.
+#arguments are output from PCA, vector with components for plotting (usually c(1,2) or c(1,3)
+#and a vector of names for the points
+
+ciscoreplot<-function(x,comps,namevec){
+  y1<-sqrt(5.99*(x$sdev[comps[1]]^2))
+  ymod<-y1-y1%%.05
+  y1vec<-c(-y1,seq(-ymod,ymod,by=0.05),y1)
+  y2vecpos<-sqrt((5.99-(y1vec^2)/x$sdev[comps[1]]^2)*x$sdev[comps[2]]^2)
+  y2vecneg<--sqrt((5.99-(y1vec^2)/x$sdev[comps[1]]^2)*x$sdev[comps[2]]^2)
+  y2vecpos[1]<-0
+  y2vecneg[1]<-0
+  y2vecpos[length(y2vecpos)]<-0
+  y2vecneg[length(y2vecneg)]<-0
+  plot(x$scores[,comps[1]],x$scores[,comps[2]],pch=19,cex=1.2,ylim=c(min(y2vecneg,x$scores[,comps[2]]),max(y2vecpos,x$scores[,comps[2]])),
+       main="PC Score Plot with 95% CI Ellipse", xlab=paste("Scores for PC",comps[1],sep=" "), ylab=paste("Scores for PC",comps[2],sep=" "),
+       xlim=c(min(y1vec,x$scores[,comps[1]]),max(y1vec,x$scores[,comps[1]])))
+  lines(y1vec,y2vecpos,col="Red",lwd=2)
+  lines(y1vec,y2vecneg,col="Red",lwd=2)
+  outliers<-((x$scores[,comps[1]]^2)/(x$sdev[comps[1]]^2)+(x$scores[,comps[2]]^2)/(x$sdev[comps[2]]^2))>5.99
+  points(x$scores[outliers,comps[1]],x$scores[outliers,comps[2]],pch=19,cex=1.2,col="Blue")
+  text(x$scores[outliers,comps[1]],x$scores[outliers,comps[2]],col="Blue",lab=namevec[outliers])
+}
+
+
+#here is an example of how to call the function for the world bank dataset
+#ciscoreplot(pc1,c(1,2),wbtrans[,1])
+
+
+#run the function	
+ciscoreplot(pc1_trans, c(1, 2), WB2.T[, 1])	
+
+#make a biplot for first two components	
+gridplot<-biplot(pc1_trans, choices = c(1, 2), pc.biplot = T)	
