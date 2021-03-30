@@ -1,0 +1,356 @@
+# This is the start of the code for my homework
+# It is a continuation of the endangered species project from the earlier homeworks
+# The requirements are Two or more continuous response variables (this is a REQUIREMENT): Body Size, Human Population Density, Latitude
+# Two (or more) categorical predictors.  One only is ok. USA Endangered, Extinct, IUCN Endangered, Activity Cycle
+# One or more additional continuous predictors (if none, that's ok). Change in Human Population Density, Basil Metabolic Rate
+
+# First, some useful packages for performing MANOVA.	
+
+
+library(MASS)	
+library(biotools)	
+library(DiscriMiner)	
+library(klaR)	
+library(car)	
+
+#get data	
+WB <- read.csv("/Users/quintdoan/Documents/Yale/Spring 2021/Multivariate/Edited_Data.csv", header = T, as.is = F)	
+
+#We need complete cases for code to work	
+WB<- WB[complete.cases(WB), ]	
+dim(WB)
+
+# I used a data imputation program to make sure that all species had values for all variables
+# As a result, some categorical variables, such as activity cycle, were made continous.
+# Here, I make the variables categorical again by rounding to the nearest whole number
+WB$ActivityCycle<-round(WB$X1.1_ActivityCycle)
+#Make an interaction plot to see the interaction between being listed as endangered by the
+# IUCN or USA and going extinct
+
+interaction.plot(WB$USA_Endangered, WB$IUCN_LISTED, WB$Extinct,	
+                 lwd = 3, col = c("red", "blue", "black"), trace.label = "IUCN Listed", 	
+                 xlab = "USA Endangered", main = "Interaction Plot for USA and IUCN Endangered lists and Extinction")	
+
+# If the IUCN lists them as endangered, they are more likely to also be extinct.
+# Of those that are IUCN listed, if they are also listed on the USA list, they are more likely to be extinct
+# Of those that are not IUCN listed, if they are listed on the USA list, they are less likely to be extinct
+#
+#It can be difficult to make meaning of these if everything is binary
+
+#Create a column that shows if something is extinct or endangered
+WB$Extinct2=2*(WB$Extinct)
+#Create a column that shows if something is extinct or endangered
+#There is not enough of these points to define a 12 dimensional space
+WB$Extinct_Endangered=(WB$Extinct2+WB$IUCN_LISTED)
+# Only one point that was both endangered and now extinct, delete
+#delete datapoints that are both extinct and listed as endangered
+WB <- WB[WB$Extinct_Endangered != 3,]
+
+#Make a column that shows both the activity cycle and conservation status
+WB$ActivityCycleLetter <- chartr("123456789", "ABCDEFGHI", WB$ActivityCycle)
+WB$ExtinctEndangeredLetter <- chartr("012345678", "ABCDEFGHI", WB$Extinct_Endangered)
+WB$LetterCombo<- with(WB, paste0(ActivityCycleLetter,ExtinctEndangeredLetter))
+
+#Make an interaction plot to see the interaction between being listed as endangered by the
+# USA and going extinct
+
+interaction.plot(WB$Extinct_Endangered, WB$Extinct, WB$USA_Endangered,	
+                lwd = 3, col = c("red", "blue", "black"), trace.label = "Extinct", 	
+                xlab = "Extinct or Endangered", main = "Interaction Plot for USA and IUCN Endangered lists and Extinction")	
+
+interaction.plot(WB$USA_Endangered, WB$Extinct_Endangered, WB$Extinct,	
+                 lwd = 3, col = c("red", "blue", "black"), trace.label = "Extinct_Endangered", 	
+                 xlab = "USA Endangered", main = "Interaction Plot for USA and IUCN Endangered lists and Extinction")	
+
+interaction.plot(WB$USA_Endangered, WB$Extinct_Endangered, WB$ActivityCycle,	
+                 lwd = 3, col = c("red", "blue", "black","green"), trace.label = "Extinct_Endangered", 	
+                 xlab = "USA Endangered", main = "Interaction Plot for USA and IUCN Endangered lists and Extinction")	
+
+interaction.plot(WB$USA_Endangered, WB$Extinct_Endangered, WB$X5.1_AdultBodyMass_g,	
+                 lwd = 3, col = c("red", "blue", "black","green"), trace.label = "Extinct_Endangered", 	
+                 xlab = "USA Endangered", main = "Interaction Plot for USA and IUCN Endangered lists and Extinction")	
+
+interaction.plot(WB$ActivityCycle, WB$Extinct_Endangered, WB$X5.1_AdultBodyMass_g,	
+                 lwd = 3, col = c("red", "blue", "black","green"), trace.label = "Extinct_Endangered", 	
+                 xlab = "Activity Cycle", main = "Interaction Plot for Body Mass and Status")	
+
+interaction.plot(WB$ActivityCycle, WB$Extinct_Endangered, WB$X26.4_GR_MidRangeLat_dd,	
+                 lwd = 3, col = c("red", "blue", "black","green"), trace.label = "Extinct_Endangered", 	
+                 xlab = "Activity Cycle", main = "Interaction Plot for Mid-Range Latitude and Status")	
+
+interaction.plot(WB$ActivityCycle, WB$Extinct_Endangered, WB$X27.2_HuPopDen_Mean_n.km2,	
+                 lwd = 3, col = c("red", "blue", "black","green"), trace.label = "Extinct_Endangered", 	
+                 xlab = "Activity Cycle", main = "Interaction Plot for Population Density and Status")	
+
+# Next, we fit a two-way MANOVA model with an interaction.	
+
+
+#SUPER IMPORTANT - include these options below to get correct Type III sum of squares (partial SS)	
+#See  https://rcompanion.org/rcompanion/d_04.html  for an explanation.  This will make results consistent 	
+#  with other stat programs like SAS and SPSS.	
+
+options(contrasts = c("contr.sum", "contr.poly"))	
+
+EndangeredMAOV <- lm(cbind(X5.1_AdultBodyMass_g,X26.4_GR_MidRangeLat_dd,X27.2_HuPopDen_Mean_n.km2)~ActivityCycle*Extinct_Endangered,  	
+                  data = WB)	
+
+#Multivariate and univariate results	
+summary(Anova(EndangeredMAOV, type = 3), univariate = T)	
+summary(Anova(EndangeredMAOV, type = 3), univariate = F)
+# Next - run as a one-way ANOVA to get a few specific contrasts.	
+
+
+#RUN LINE BELOW TO MAKE SURE CONTRASTS ARE SET CORRECTLY -  this returns things to their default level	
+options(contrasts = c("contr.treatment", "contr.poly"))	
+
+#Make sure LetterCombo is a factor	
+WB$LetterCombo <- as.factor(WB$LetterCombo)	
+
+
+#Fit one way MANOVA model	
+EndangeredMAOV2 <- lm(cbind(X5.1_AdultBodyMass_g,X26.4_GR_MidRangeLat_dd,X27.2_HuPopDen_Mean_n.km2) ~ LetterCombo, data = WB)	
+#summary(Anova(EndangeredMAOV2, type = 3), univariate = T)
+
+#Fit one way ANOVA model just for body mass	
+EndangeredBodyMass <- lm(X5.1_AdultBodyMass_g ~ LetterCombo, data = WB)	
+
+contrasts(WB$LetterCombo)	
+levels(WB$LetterCombo)	
+
+#Do not include AA
+#Get multivariate contrast for A vs B - notice that BC is the reference level	
+linearHypothesis(EndangeredMAOV2, "LetterComboAB + LetterComboAC - LetterComboBA - LetterComboBB - LetterComboBC= 0") 	
+
+#Get univariate contrast for A vs B for body mass	
+linearHypothesis(EndangeredBodyMass, "LetterComboAB + LetterComboAC - LetterComboBA - LetterComboBB - LetterComboBC= 0") 	
+
+#Get multivariate contrast for AX,BX and XB,XC interaction	
+linearHypothesis(EndangeredMAOV2, "LetterComboAB - LetterComboAC -  LetterComboBB + LetterComboBC= 0") 	
+
+#Get univariate contrast for AX,BX and XB,XC interaction for body mass
+linearHypothesis(EndangeredBodyMass, "LetterComboAB - LetterComboAC -  LetterComboBB + LetterComboBC= 0") 	
+
+
+# Next, we run a multivariate GLM where we also include conitnuous variables as covariates.	
+
+# *VERY IMPORTANT - you need to change the model parameterization options using the code below.   Otherwise, you'll get Type III SS that won't match what you get in any other program.  Note however, this will mess up the contrasts calculated above!!!!!	
+
+
+#SUPER IMPORTANT - include these options below to get correct Type III sum of squares (partial SS)	
+#See  https://rcompanion.org/rcompanion/d_04.html  for an explanation	
+options(contrasts = c("contr.sum", "contr.poly"))	
+
+### Default is: options(contrasts = c("contr.treatment", "contr.poly"))	
+
+#make matrix plot to look at differences between groups	
+plot(WB["X27.4_HuPopDen_Change"],
+     col = WB["X5.1_AdultBodyMass_g"],
+    pch = WB["X5.1_AdultBodyMass_g"], cex = 1.2)	
+
+# Boxplots of mean score by Extinct or Endangered for each response variable	
+
+
+#Make labels vector	
+responsevec <- c("X5.1_AdultBodyMass_g","X26.4_GR_MidRangeLat_dd","X27.2_HuPopDen_Mean_n.km2")	
+for (i in 2:4){	
+  boxplot(WB[, i] ~ ExtinctEndangeredLetter, data = WB, col = 'yellow', main = paste(responsevec[i-1], "By Extinct"), ylab = "")	
+  #calculate means using the tapply function - could also use the by function	
+  means <- tapply(WB[, i], WB$ExtinctEndangeredLetter, mean)	
+  points(means, col = "red", pch = 19, cex = 1.2)	
+  text(x = c(1:4), y = means+.2, labels = round(means,2))	
+}	
+
+# Boxplots of mean score by Extinct or Endangered for each response variable	
+
+
+#Make labels vector	
+responsevec <- c("X5.1_AdultBodyMass_g","X26.4_GR_MidRangeLat_dd","X27.2_HuPopDen_Mean_n.km2")	
+for (i in 2:4){	
+  boxplot(WB[, i] ~ ActivityCycleLetter, data = WB, col = 'yellow', main = paste(responsevec[i-1], "By ActivityCycle"), ylab = "")	
+  #calculate means using the tapply function - could also use the by function	
+  means <- tapply(WB[, i], WB$ActivityCycleLetter, mean)	
+  points(means, col = "red", pch = 19, cex = 1.2)	
+  text(x = c(1:4), y = means+.2, labels = round(means,2))	
+}	
+
+#Check to see if there is a linear relationship between explanatory and response
+#Create a linear Model
+BodyMass.lm = lm(X27.4_HuPopDen_Change~X5.1_AdultBodyMass_g , data=WB) 
+BodyMass.stdres = rstandard(BodyMass.lm)
+#Create a normal Probability Plot
+qqnorm(BodyMass.stdres, ylab="Standardized Residuals", xlab="Normal Scores", main="BodyMass v. Human Pop Den Change") 
+qqline(BodyMass.stdres)
+
+
+#Check to see if there is a linear relationship between explanatory and response
+#Create a linear Model
+BodyMass.lm = lm(X18.1_BasalMetRate_mLO2hr~X5.1_AdultBodyMass_g, data=WB) 
+BodyMass.stdres = rstandard(BodyMass.lm)
+#Create a normal Probability Plot
+qqnorm(BodyMass.stdres, ylab="Standardized Residuals", xlab="Normal Scores", main="BodyMass v. Basal Metabolic Rate") 
+qqline(BodyMass.stdres)
+
+#Check to see if there is a linear relationship between explanatory and response
+#Create a linear Model
+Lat.lm = lm(X27.4_HuPopDen_Change~X26.4_GR_MidRangeLat_dd, data=WB) 
+Lat.stdres = rstandard(Lat.lm)
+#Create a normal Probability Plot
+qqnorm(Lat.stdres, ylab="Standardized Residuals", xlab="Normal Scores", main="Lat v. Human Pop Den Change") 
+qqline(Lat.stdres)
+
+#Check to see if there is a linear relationship between explanatory and response
+#Create a linear Model
+Lat.lm = lm(X18.1_BasalMetRate_mLO2hr~X26.4_GR_MidRangeLat_dd, data=WB) 
+Lat.stdres = rstandard(Lat.lm)
+#Create a normal Probability Plot
+qqnorm(Lat.stdres, ylab="Standardized Residuals", xlab="Normal Scores", main="Lat v. Basal Met. Rate") 
+qqline(Lat.stdres)
+
+#Check to see if there is a linear relationship between explanatory and response
+#Create a linear Model
+Hu.lm = lm(X27.4_HuPopDen_Change~X27.2_HuPopDen_Mean_n.km2, data=WB) 
+Hu.stdres = rstandard(Hu.lm)
+#Create a normal Probability Plot
+qqnorm(Hu.stdres, ylab="Standardized Residuals", xlab="Normal Scores", main="Human Pop Den Mean v. Human Pop Den Change") 
+qqline(Hu.stdres)
+
+#Check to see if there is a linear relationship between explanatory and response
+#Create a linear Model
+Hu2.lm = lm(X18.1_BasalMetRate_mLO2hr~X27.2_HuPopDen_Mean_n.km2, data=WB) 
+Hu.stdres = rstandard(Hu2.lm)
+#Create a normal Probability Plot
+qqnorm(Hu.stdres, ylab="Standardized Residuals", xlab="Normal Scores", main="Human Pop Den Mean v. Basal Met. Rate") 
+qqline(Hu.stdres)
+
+
+#Fit the model	
+EndangeredMod2 <- lm(cbind(X5.1_AdultBodyMass_g,X26.4_GR_MidRangeLat_dd,X27.2_HuPopDen_Mean_n.km2) ~ ActivityCycleLetter+
+                       ExtinctEndangeredLetter+ActivityCycleLetter*ExtinctEndangeredLetter+ X27.4_HuPopDen_Change+ X18.1_BasalMetRate_mLO2hr, 
+                  data = WB)
+
+#Multivariate results and univariate results with with type 3 Sum of squares	
+summary(Anova(EndangeredMod2, type = 3), univariate = T)	
+
+#To get Type I Sum of Squares (sequential), you'll need to fit a separate model for each response.	
+mod1 <- lm(X5.1_AdultBodyMass_g ~ ActivityCycleLetter+ExtinctEndangeredLetter+
+             ActivityCycleLetter*ExtinctEndangeredLetter+ X27.4_HuPopDen_Change+ X18.1_BasalMetRate_mLO2hr, data = WB)	
+mod2 <- lm(X26.4_GR_MidRangeLat_dd ~ ActivityCycleLetter+ExtinctEndangeredLetter+
+             ActivityCycleLetter*ExtinctEndangeredLetter+ X27.4_HuPopDen_Change+ X18.1_BasalMetRate_mLO2hr, data = WB)	
+mod3 <- lm(X27.2_HuPopDen_Mean_n.km2 ~ ActivityCycleLetter+ExtinctEndangeredLetter+
+             ActivityCycleLetter*ExtinctEndangeredLetter+ X27.4_HuPopDen_Change+ X18.1_BasalMetRate_mLO2hr, data = WB)	
+
+#If you want them, Type I Sum of Squares	
+summary.aov(mod1)	
+summary.aov(mod2)	
+summary.aov(mod3)	
+
+#see if data is multivariate normal
+#get online function	
+source("http://www.reuningscherer.net/Multivariate/R/CSQPlot.r.txt")	
+
+#Finally, let's check our residuals	
+CSQPlot(EndangeredMod2$residuals, label = "Residuals from Endangered GLM")	
+
+#It does not, lets assess where the non-normality lies
+
+#Get a normal quantile plot of for the eight variables, raw scale
+qqPlot(WB$X5.1_AdultBodyMass_g, col = 'red', pch = 19)	
+qqPlot(WB$X27.2_HuPopDen_Mean_n.km2, col = 'red', pch = 19)	
+qqPlot(WB$X26.4_GR_MidRangeLat_dd, col = 'red', pch = 19)	
+qqPlot(WB$X27.4_HuPopDen_Change, col = 'red', pch = 19)	
+qqPlot(WB$X18.1_BasalMetRate_mLO2hr, col = 'red', pch = 19)	
+
+#perform the relevant transformation
+WB$LogAdultBodyMass=log(WB$X5.1_AdultBodyMass_g+5)
+#Display normal quantile plot
+qqPlot(WB$LogAdultBodyMass, col = 'red', pch = 19)
+
+#perform the relevant transformation
+WB$LogHuPopDenMean=log(WB$X27.2_HuPopDen_Mean_n.km2+5)
+#Display normal quantile plot
+qqPlot(WB$LogHuPopDenMean, col = 'red', pch = 19)
+
+#Mid range lattitude does not need a transformation
+
+#perform the relevant transformation
+WB$LogHuPopDen_Change=log(WB$X27.4_HuPopDen_Change+5)
+#Display normal quantile plot
+qqPlot(WB$LogHuPopDen_Change, col = 'red', pch = 19)
+
+#perform the relevant transformation
+WB$LogBasalMetRate=log(WB$X18.1_BasalMetRate_mLO2hr+5)
+#Display normal quantile plot
+qqPlot(WB$LogBasalMetRate, col = 'red', pch = 19)
+
+# Next, we run a multivariate GLM where we also include conitnuous variables as covariates.	
+
+# *VERY IMPORTANT - you need to change the model parameterization options using the code below.   Otherwise, you'll get Type III SS that won't match what you get in any other program.  Note however, this will mess up the contrasts calculated above!!!!!	
+
+
+#SUPER IMPORTANT - include these options below to get correct Type III sum of squares (partial SS)	
+#See  https://rcompanion.org/rcompanion/d_04.html  for an explanation	
+options(contrasts = c("contr.sum", "contr.poly"))	
+
+### Default is: options(contrasts = c("contr.treatment", "contr.poly"))	
+
+#Fit the model	
+EndangeredMod2 <- lm(cbind(LogAdultBodyMass,X26.4_GR_MidRangeLat_dd,LogHuPopDenMean) ~ ActivityCycleLetter+
+                       ExtinctEndangeredLetter+ActivityCycleLetter*ExtinctEndangeredLetter+ LogHuPopDen_Change+ LogBasalMetRate, 
+                     data = WB)
+
+#Multivariate results and univariate results with with type 3 Sum of squares	
+summary(Anova(EndangeredMod2, type = 3), univariate = T)	
+
+#To get Type I Sum of Squares (sequential), you'll need to fit a separate model for each response.	
+mod1 <- lm(LogAdultBodyMass ~ ActivityCycleLetter+ExtinctEndangeredLetter+
+             ActivityCycleLetter*ExtinctEndangeredLetter+ LogHuPopDen_Change+ LogBasalMetRate, data = WB)	
+mod2 <- lm(X26.4_GR_MidRangeLat_dd ~ ActivityCycleLetter+ExtinctEndangeredLetter+
+             ActivityCycleLetter*ExtinctEndangeredLetter+ LogHuPopDen_Change+ LogBasalMetRate, data = WB)	
+mod3 <- lm(LogHuPopDenMean ~ ActivityCycleLetter+ExtinctEndangeredLetter+
+             ActivityCycleLetter*ExtinctEndangeredLetter+ LogHuPopDen_Change+ LogBasalMetRate, data = WB)	
+
+#If you want them, Type I Sum of Squares	
+summary.aov(mod1)	
+summary.aov(mod2)	
+summary.aov(mod3)	
+
+#see if data is multivariate normal
+#get online function	
+source("http://www.reuningscherer.net/Multivariate/R/CSQPlot.r.txt")	
+
+#Finally, let's check our residuals	
+CSQPlot(EndangeredMod2$residuals, label = "Residuals from Endangered GLM")	
+
+
+# ##  MRPP	
+
+# Run a multi-response permutation procedure on the response variables by endangered classification	
+
+
+library(vegan)	
+?mrpp	
+(mrpp1 <- mrpp(WB[,c("LogAdultBodyMass","X26.4_GR_MidRangeLat_dd","LogHuPopDenMean")], WB$ExtinctEndangeredLetter))	
+summary(mrpp1)
+
+
+#Fit model using aov() function	
+Endangeredtukeyaov <- aov(LogHuPopDenMean ~ ActivityCycleLetter, data = WB)	
+
+#Fix margins	
+TukeyHSD(Endangeredtukeyaov)	
+par(mar = c(5, 11, 4, 1))	
+plot(TukeyHSD(Endangeredtukeyaov), las = 1)	
+
+
+# ###General Multiple Comparison Corrections (i.e. adjust p-values)	
+
+
+#General Multiple Comparison Corrections	
+
+p.adjust(p = c(.000, .002844, .000), method = "bonferroni")	
+
+p.adjust(p = c(.000, .002844, .000), method = "holm")	
+
+p.adjust(p = c(.000, .002844, .000), method = "hochberg")	
+
+
