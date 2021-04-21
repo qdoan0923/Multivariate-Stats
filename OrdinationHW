@@ -1,0 +1,434 @@
+#Load Packages
+library(dplyr)
+library(vegan)	
+library(vegan3d)	
+library(mgcv)	
+library(MASS)	
+library(rgl)	
+
+#get data	
+WB <- read.csv("/Users/quintdoan/Documents/Yale/Spring 2021/Multivariate/Edited_Data.csv", header = T, as.is = F)	
+
+#We need complete cases for code to work	
+WB<- WB[complete.cases(WB), ]	
+dim(WB)
+
+# I used a data imputation program to make sure that all species had values for all variables
+# As a result, some categorical variables, such as activity cycle, were made continous.
+# Here, I make the variables categorical again by rounding to the nearest whole number
+WB$ActivityCycle<-round(WB$X1.1_ActivityCycle)
+
+
+#Make an interaction plot to see the interaction between being listed as endangered by the
+# If the IUCN lists them as endangered, they are more likely to also be extinct.
+# Of those that are IUCN listed, if they are also listed on the USA list, they are more likely to be extinct
+# Of those that are not IUCN listed, if they are listed on the USA list, they are less likely to be extinct
+#
+#It can be difficult to make meaning of these if everything is binary
+
+#Create a column that shows if something is extinct or endangered
+WB$Extinct2=2*(WB$Extinct)
+#Create a column that shows if something is extinct or endangered
+#There is not enough of these points to define a 12 dimensional space
+WB$Extinct_Endangered=(WB$Extinct2+WB$IUCN_LISTED)
+# Only one point that was both endangered and now extinct, delete
+#delete datapoints that are both extinct and listed as endangered
+WB <- WB[WB$Extinct_Endangered != 3,]
+
+#Make a column that shows both the activity cycle and conservation status
+WB$ActivityCycleLetter <- chartr("123456789", "ABCDEFGHI", WB$ActivityCycle)
+WB$ExtinctEndangeredLetter <- chartr("012345678", "ABCDEFGHI", WB$Extinct_Endangered)
+WB$LetterCombo<- with(WB, paste0(ActivityCycleLetter,ExtinctEndangeredLetter))
+
+#perform the relevant transformation (add 90 so all values are positive, it is lattitude)
+WB$X26.4_GR_MidRangeLat_dd_Add=abs(WB$X26.4_GR_MidRangeLat_dd)
+
+#Split the lattitude areas into "sites". Each makes up 5 degrees latitude.
+library(Hmisc)
+
+WB$X26.4_GR_MidRangeLat_dd_Group<-as.numeric(cut2(WB$X26.4_GR_MidRangeLat_dd_Add, g=18))
+
+WB$X5.1_AdultBodyMass_g_Group<-as.numeric(cut2(WB$X5.1_AdultBodyMass_g, g=10))
+
+
+# Turn into data frame
+
+Art.tab <-with(WB, table(X26.4_GR_MidRangeLat_dd_Group, X5.1_AdultBodyMass_g_Group))
+
+Art.tab
+
+DataWB<-as.data.frame.matrix(Art.tab)
+
+DataWB$LatitudeGroup <- c("A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q")
+
+#Show how you convert an environmental variable for each species into a mean for each plot
+#Each species is classified as an occupant of the plot of its midrange lat
+
+aggregate(WB$X27.2_HuPopDen_Mean_n.km2, by=list(WB$X26.4_GR_MidRangeLat_dd_Group), FUN=mean)
+aggregate(WB$X28.1_Precip_Mean_mm, by=list(WB$X26.4_GR_MidRangeLat_dd_Group), FUN=mean)
+aggregate(WB$X26.1_GR_Area_km2, by=list(WB$X26.4_GR_MidRangeLat_dd_Group), FUN=mean)
+aggregate(WB$X26.7_GR_MidRangeLong_dd, by=list(WB$X26.4_GR_MidRangeLat_dd_Group), FUN=mean)
+aggregate(WB$X28.2_Temp_Mean_01degC, by=list(WB$X26.4_GR_MidRangeLat_dd_Group), FUN=mean)
+aggregate(WB$X27.4_HuPopDen_Change, by=list(WB$X26.4_GR_MidRangeLat_dd_Group), FUN=mean)
+
+aggregate(WB$X27.2_HuPopDen_Mean_n.km2, by=list(WB$X5.1_AdultBodyMass_g_Group), FUN=mean)
+
+
+
+#Add six environmental variables
+DataWB$NewHumanPopDenMean=c(68.70520, 70.95170, 81.06772, 54.09481, 65.36580, 113.34286, 114.76165, 81.53350, 94.8943, 84.15003, 88.94960, 93.88635, 101.18344, 81.40635, 85.31269, 78.38397, 30.13748)
+
+DataWB$NewPrecipMean=c(161.07031, 168.81470, 141.02064, 165.95620, 182.20938, 162.24384, 149.06118, 152.72638,135.31939, 125.36285, 119.72507, 94.64312, 77.71001, 71.07063, 53.03322, 54.33708, 44.35646)
+
+DataWB$NewGRAreaMean=c(1454772.5, 1590156.8, 709061.8, 2252752.8, 1712997.5, 1548643.4, 1719936.3, 1774086.6, 1507550.1, 1060093.3, 846620.4, 1024633.5, 1146824.5, 1033358.2, 851851.7, 1798188.5, 4034154.0)
+
+DataWB$NewMidRangeLongMean=c(31.8042961, 40.1633167, 26.0650598, 28.7700466, 39.9116087, 33.5231305, 26.4650507, 30.0692917, 36.2431400, 20.7926246, 20.0572333, 8.5790698, 27.6058609, 29.7180333, 22.6081728, 7.8704305, 0.6372531)
+
+DataWB$NewTempMean=c(229.10728, 226.65272, 230.38616, 232.43931, 230.66616, 227.50335, 228.84545, 234.97741, 228.72624, 222.97490, 210.57343, 202.93928, 179.53687, 149.51115, 115.68663, 77.97572, 11.11978)
+                        
+DataWB$NewHumanPopDenChangeMean=c(0.12408416, 0.11700211, 0.12527057, 0.12330677, 0.13203295, 0.11842809, 0.10975188, 0.12007749, 0.12324809, 0.10503953, 0.10844087, 0.09165529, 0.07995848, 0.08087685, 0.07906870, 0.04748507, 0.01548122)
+
+
+DataWB<-as.data.frame.matrix(DataWB)
+
+#Make a table that is just plots
+
+plots<- DataWB[,1:10]
+plotsenv<- DataWB[,12:17]
+
+
+#Perform correspondence analysis	
+Mammalscca <- cca(DataWB[, 1:10])	
+
+#plot results	
+plot(Mammalscca, type = "n" )	
+text(Mammalscca, dis = "wa")	
+points(Mammalscca, pch = 21, col = "red", bg = "yellow", cex = 1.2)	
+text(Mammalscca, "species", col = "blue", cex = 0.8)	
+
+Mammalscca
+# This plot is somewhat hard to read, so we try	
+
+# #### Detrended Correspondence Analysis	
+
+# This is only mildly easier to read.   DCA uses the decorana() function.	
+
+
+#detrended correspondence analysis	
+alaskadca <- decorana(DataWB[, 1:10])	
+plot(alaskadca, type = "n")	
+text(alaskadca, display = c("sites"), cex = 0.86)	
+points(alaskadca, pch = 21, col = "red", bg = "yellow", cex = 0.6)	
+text(alaskadca, "species", col = "blue", cex = 0.6)	
+
+alaskadca <- decorana(DataWB[, 1:10], mk = 5)	
+plot(alaskadca, type = "n")	
+text(alaskadca, display = c("sites"), cex = 0.86)	
+points(alaskadca, pch = 21, col = "red", bg = "yellow", cex = 0.6)	
+text(alaskadca, "species", col = "blue", cex = 0.6)	
+
+
+# #### Multidimensional Scaling	
+
+
+#assign plot names to row names	
+rownames(DataWB) <- DataWB$LatitudeGroup
+
+
+
+# Now, perform MDS for 1 to 5 dimensions using Euclidean distance.  Perform randomization to check structure.  Uses the metaMDS() function.	
+
+
+results <- matrix(NA, 21, 5)	
+#j is number of dimensions to try	
+for (j in 1:5){	
+  for (i in 1:20){	
+    temp <- DataWB[shuffle(nrow(DataWB)), 1]	
+    for (k in 1:10) { temp <- cbind(temp, DataWB[shuffle(nrow(DataWB)), k]) }	
+    #store stress	
+    results[i, j] <- metaMDS(temp, k = j, distance = "euclidean")$stress	
+  }	
+  results[21, j] <- metaMDS(DataWB[, 1:10], k = j, distance = "euclidean")$stress	
+}	
+
+
+# A plot of results suggests that 2 dimensions is a good solution (after that, results are not different than random results)	
+
+
+#plot stress results	
+
+plot(c(1:5), results[21, ], type = "b", col = "blue", lwd = 3, 	
+     ylim = c(0, max(results)), xlab = "Dimensions", ylab = "Stress", pch = 19, 	
+     main = "MDS for Mammal Data, Euclidean Distance")	
+mins <- apply(results[1:20, ], 2, min)	
+maxs <- apply(results[1:20, ], 2, max)	
+meds <- apply(results[1:20, ], 2, median)	
+
+for (i in 1:5){	
+  points(rep(i, 3), c(mins[i], meds[i], maxs[i]), type = "b", col = "red", lwd = 3, pch = 19)	
+}	
+legend(3.5, (.9*max(results)), c("MDS Solution", "20 Permutations"), lwd = 3, col = c("blue", "red"))	
+
+# Let's see a plot of the one-dimensional solution	
+
+
+#two dimensional solution	
+Mammal.mds1 <- metaMDS(DataWB[, 1:10], k = 1, distance = "euclidean")	
+
+#quick plot	
+plot(Mammal.mds1, type = "t")	
+
+#more refined plot	
+fig <- ordiplot(Mammal.mds1, type = "none", cex = 1.1)	
+text(fig, "species", col = "red", cex = 1.1)	
+text(fig, "sites", col = "blue", cex = 0.8)	
+
+# Let's see a plot of the two-dimensional solution	
+
+
+#two dimensional solution	
+Mammal.mds2 <- metaMDS(DataWB[, 1:10], k = 2, distance = "euclidean")	
+
+#quick plot	
+plot(Mammal.mds2, type = "t")	
+
+#more refined plot	
+fig <- ordiplot(Mammal.mds2, type = "none", cex = 1.1)	
+text(fig, "species", col = "red", cex = 1.1)	
+text(fig, "sites", col = "blue", cex = 0.8)	
+
+
+# We can also add environmental variables to our plot	
+
+
+fig <- ordiplot(Mammal.mds2, type = "none", cex = 1.1)	
+text(fig, "species", col = "red", cex = 1.1)	
+text(fig, "sites", col = "blue", cex = 0.8)	
+
+Mammals.env <- DataWB[, 12:17]	
+fit <- envfit(Mammal.mds2, Mammals.env, permutations = 1000)	
+plot(fit, col = "black", lwd = 3)	
+fit   #Only Precip is significant	
+
+
+# Let's to the plot again just with HumanPopDenChange dens and PrecipMean as the two variables close to significance
+
+#rerun with just precip and change in density	
+fig <- ordiplot(Mammal.mds2, type = "none", cex = 1.1)	
+text(fig, "species size", col = "red", cex = 1.1)	
+text(fig, "sites", col = "blue", cex = 0.8)	
+fit <- envfit(Mammal.mds2, Mammals.env[, c(4, 5)], permutations = 1000)	
+plot(fit, col = "black", lwd = 3)	
+fit   	
+
+
+# We can also use regression splines for Age and Pfankuch Index to see if they actual seem to be 'linearly' related across the MDS surface.  We can also create a 3-D wire plot of Age and Pfankuch Index across the MDS surface.	
+
+
+#first plot with interpolated surface	
+fig <- ordiplot(Mammal.mds2, type = "none", cex = 1.1, main = "NMDS forMammal Data")	
+text(fig, "species", col = "red", cex = 0.7)	
+text(fig, "sites", col = "black", cex = 0.7)	
+plot(fit)	
+tmp1 <- with(Mammals.env, ordisurf(Mammal.mds2, NewPrecipMean, add = TRUE))	
+tmp2 <- with(Mammals.env, ordisurf(Mammal.mds2, NewHumanPopDenChangeMean, add = TRUE, col = "green4"))	
+
+
+#plot of functions for precip and pop den change Index	
+vis.gam(tmp1, main = "NewPrecipMean")	
+vis.gam(tmp2, main = "NewHumanPopDenChangeMean")	
+
+
+# NEXT - Stress suggests we might want a 3-dimensional solution.  Let's make a 3D plot.	
+
+
+par(pty = "s", mar = c(5, 5, 5, 5))	
+Mammals.mds2a <- metaMDS(DataWB[, 1:10], k = 3, distance = "euclidean")	
+fit2a <- envfit(Mammals.mds2a, Mammals.env[, c(1, 2)], choices = c(1:3), permutations = 1000)	
+pl <- ordiplot3d(Mammals.mds2a, , envfit = fit2a, pch = 19)	
+points(pl, "points", pch = 16, col = "red", cex = 0.7)	
+text(pl, "arrows", col = "blue", pos = 3)	
+sp <- scores(Mammals.mds2a, choices = 1:3, display = "species", scaling = "symmetric")	
+text(pl$xyz.convert(sp), rownames(sp), cex = 0.7, xpd = TRUE)	
+
+
+#Stressplot of 2d and 3d solution - probably 2-D solution is adequate.	
+stressplot(Mammal.mds1)	
+stressplot(Mammal.mds2)	
+stressplot(Mammals.mds2a)	
+
+#make screeplot of stress	
+stress <- c(Mammal.mds1$stress, Mammal.mds2$stress, Mammals.mds2a$stress)	
+plot(c(1:3), stress, col = "blue", lwd = 3, type = "b", xlab = "Dimensions")
+
+# ### NMDS using Bray-Curtis distance, 2D	
+
+# Not sure why, but I couldn't get this to converge for more than 2 dimensions.	
+
+
+#Note that Bray-Curtis is default distance.	
+Mammals.mds3 <- metaMDS(DataWB[, 1:10], k = 2)	
+
+#ordination plot	
+fig <- ordiplot(Mammals.mds3, type = "none", cex = 1.1)	
+text(fig, "species", col = "red", cex = 1.1)	
+text(fig, "sites", col = "blue", cex = 0.8)	
+
+#add environmental variables	
+
+Mammals.env <- DataWB[, 12:17]	
+fit <- envfit(Mammals.mds3, Mammals.env, permutations = 1000)	
+plot(fit, col = "black", lwd = 3)	
+fit   #None are significant	
+
+
+# This time, NewPrecipMean is sig and NewHumanPopDenChange are closest to significant.   We rerun with just these two variables on the final plot	
+
+
+#rerun with just Age and Turbidity	
+fig <- ordiplot(Mammals.mds3, type = "none", cex = 1.1)	
+text(fig, "species", col = "red", cex = 1.1)	
+text(fig, "sites", col = "blue", cex = 0.8)	
+fit <- envfit(Mammals.mds3, Mammals.env[, c(4, 5)], permutations = 1000)	
+plot(fit, col = "black", lwd = 3)	
+fit   # NewTempMean and NewHumanPopDenChange
+
+
+# Add regression splines and get 3-D wireplot for Age and Turbitity.	
+
+#first plot with interpolated surface	
+fig <- ordiplot(Mammals.mds3, type = "none", cex = 1.1, main = "NMDS for Mammal Data")	
+text(fig, "species", col = "red", cex = 0.7)	
+text(fig, "sites", col = "black", cex = 0.7)	
+plot(fit)	
+tmp1 <- with(Mammals.env, ordisurf(Mammals.mds3, NewPrecipMean, add = TRUE))	
+tmp2 <- with(Mammals.env, ordisurf(Mammals.mds3, NewHumanPopDenChangeMean, add = TRUE, col = "green4"))	
+
+
+#plot of functions for Age and Turbidity	
+vis.gam(tmp1, main = "NewPrecipMean")	
+vis.gam(tmp2, main = "NewHumanPopDenChangeMean")	
+
+
+
+
+# First, we get the data - notice that count data and environmental variables are in two different files	
+
+
+
+# ### Correspondence analysis	
+
+# Perform CA and make a quick plot.   Arch effect is pretty clear	
+
+plotsca <- cca(plots)	
+plot(plotsca, main = "Correspondence Analysis for Mammal Data", type = "n")	
+#uncomment the line below if you want plot names	
+#text(spiderca, display = c("sites"), labels = rownames(spidercount), cex = 0.86)	
+points(plotsca, pch = 19, col = "black", cex = 1)	
+text(plotsca, "species", col = "blue", cex = 1.1)	
+
+
+# Add environmental variables	
+
+
+plot(plotsca, main = "Correspondence Analysis for Mammal Data", type = "n")	
+#uncomment the line below if you want plot names	
+#text(spiderca, display = c("sites"), labels = rownames(spidercount), cex = 0.86)	
+points(plotsca, pch = 19, col = "black", cex = 1)	
+text(plotsca, "species", col = "blue", cex = 1.1)	
+#add environmental variables	
+fit <- envfit(plotsca, plotsenv, permutations = 1000)	
+plot(fit, col = "black", lwd = 3)	
+#get significance - all environmental variables are significant	
+fit	
+
+
+# ### Detrended Correspondence Analysis	
+
+# We try DCA as a way of dealing withh the arch effect.   This is more successful this time than it was in the alaska stream data.	
+
+
+Mammaldca <- decorana(plots)	
+plot(Mammaldca, main = "DCA for Mammal Data", type = "n")	
+#uncomment the line below if you want plot names	
+#text(spiderdca, display = c("sites"), labels = rownames(spidercount), cex = 0.86)	
+points(Mammaldca, pch = 19, col = "black", cex = 1)	
+text(Mammaldca, "species", col = "blue", cex = 1.1)	
+
+#add environmental variables	
+fit <- envfit(Mammaldca, plotsenv, permutations = 1000)	
+plot(fit, col = "red", lwd = 3)	
+
+
+# ### Multidimensional Scaling	
+
+
+plotsmds <- metaMDS(plots)	
+plot(plotsmds, main = "NMDS for Mammal Data", type = "n")	
+#uncomment the line below if you want plot names	
+#text(spidermds, display = c("sites"), labels = rownames(spidercount), cex = 0.86)	
+points(plotsmds, pch = 19, col = "black", cex = 1)	
+text(plotsmds, "species", col = "blue", cex = 1.1)	
+
+#add environmental variables	
+fit <- envfit(plotsmds, plotsenv, permutations = 1000)	
+plot(fit, col = "red", lwd = 3)	
+
+
+# As before, we use splines and 3-D wire plots to see how some of the environmental variables relate to the MDS space.	
+
+
+plotsnmds <- metaMDS(plots)	
+fit1 <- envfit(plotsmds ~ NewPrecipMean+NewHumanPopDenChangeMean, plotsenv) 	
+fit2 <- envfit(plotsnmds ~ NewTempMean+NewMidRangeLongMean, plotsenv) 	
+
+#first plot with interpolated surface	
+fig <- ordiplot(plotsnmds, type = "none", cex = 1.1, main = "NMDS for Mammal Data")	
+text(fig, "species", col = "red", cex = 0.7)	
+text(fig, "sites", col = "black", cex = 0.7)	
+plot(fit1)	
+tmp1 <- with(plotsenv, ordisurf(plotsnmds, NewHumanPopDenChangeMean, add = TRUE))	
+tmp2 <- with(plotsenv, ordisurf(plotsnmds, NewPrecipMean, add = TRUE, col = "green4"))	
+
+#second plot with interpolated surface	
+fig <- ordiplot(plotsnmds, type = "none", cex = 1.1, main = "NMDS for Mammal Data")	
+text(fig, "species", col = "red", cex = 0.7)	
+text(fig, "sites", col = "black", cex = 0.7)	
+plot(fit2)	
+tmp1 <- with(plotsenv, ordisurf(plotsnmds, NewHumanPopDenChangeMean, add = TRUE))	
+tmp2 <- with(plotsenv, ordisurf(plotsnmds, NewPrecipMean, add = TRUE, col = "green4"))	
+
+#plot of functions for BareSand and FallTwig	
+vis.gam(tmp1, main = "NewHumanPopDenChangeMean")	
+vis.gam(tmp2, main = "NewPrecipMean")	
+
+
+# ### Canonical Correspondence Analysis	
+
+# We now try including environmental variables in the actual calculation of the ordination diagram (note this won't help the arch effect).	
+
+# This involves using the cca() function with an additional argument, i.e. a separate dataset with the environmental variables.	
+
+
+Mycca <- cca(plots, plotsenv, scale = "FALSE")	
+plot(Mycca)	
+
+#another way to make the plot (basically same thing)	
+plot(Mycca, main = "CCA for Mammal Data", type = "n")	
+#uncomment the line below if you want plot names	
+#text(spidercca, display = c("sites"), labels = rownames(spidercount), cex = 0.86)	
+points(Mycca, pch = 19, col = "black", cex = 1)	
+text(Mycca, "species", col = "blue", cex = 1.1)	
+
+#add environmental variables	
+fit <- envfit(Mycca, plotsenv, permutations = 1000)	
+plot(fit, col = "red", lwd = 3)	
+fit	
+
+#get summary information	
+summary(Mycca)	
+
+
+# Overall, I'd say MDS was the most successful in this case.	
+
+# THE END	
