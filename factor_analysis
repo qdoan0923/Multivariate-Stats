@@ -1,0 +1,186 @@
+# "Factor Analysis"	
+# "JDRS"	
+
+
+# Let's get some useful packages	
+
+
+library(psych)	
+library(rela)	
+library(car)	
+library(corrplot)	
+
+
+# ### My homework, Mammal Traits
+
+
+WB <- read.csv("/Users/quintdoan/Documents/Yale/Spring 2021/Multivariate/Edited_Data.csv", header = T, as.is = F)
+
+#transform select variables and reassemble into a new dataset	
+rownames(WB) <- WB[, 1]	
+
+#Create a column that shows if something is extinct or endangered
+WB$Extinct=2*(WB$Extinct)
+#Create a column that shows if something is extinct or endangered
+#There is not enough of these points to define a 12 dimensional space
+WB$Extinct_Endangered=(WB$Extinct+WB$IUCN_LISTED)
+
+#delete datapoints that are both extinct and listed as endangered
+WB2 <- WB[WB$Extinct_Endangered != 3,]
+
+WB2 <-WB2[,-1]
+
+WB3 <-WB2[,1:47]
+
+# For starters, let's look at whether our data will work well for factor analysis.  We'll calculate correlations, look at a correlation plot, and get the KMO metric.	
+
+# Here are the correlations.	
+
+#Examine raw correlations	
+round(cor(WB3),2)	
+
+#Get correlation plot	
+corrplot.mixed(cor(WB3), lower.col = "black", upper = "ellipse", tl.col = "black", number.cex = .7, tl.pos = "lt", tl.cex = .7, p.mat = cor.mtest(WB2, conf.level = .95)$p, sig.level = .05)	
+
+
+# Interestingly, log(imports) is only really related to log(exports).  We could consider removing this indicator from our analysis.  Other indicators are highly correlated (which is good).	
+
+# Let's get KMO.	
+
+
+#This uses the paf() function in the rela package - more on this below	
+paf(as.matrix(WB3))$KMO	
+
+# KMO is quite high which is good.	
+
+# #### Factor Analysis using Maximum Likelihood (only option in factanal).	
+
+# We also do a Varimax Rotation.  This uses the factanal() function.	
+
+
+#try 2 factor solution	
+fact0 <- factanal(WB3, factors = 2, rotation = "varimax")	
+fact0	
+
+#try 3 factor solution	
+fact1 <- factanal(WB3, factors = 3, rotation = "varimax")	
+fact1	
+
+
+# Get loading plots for 3 factor model	
+
+
+#first two factors	
+plot(fact1$loadings, pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact1$loadings, labels = names(WB2), cex = 0.8)	
+
+#factors 1 and 3	
+plot(fact1$loadings[, c(1,3)], pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact1$loadings[, c(1,3)], labels = names(WB2), cex = 0.8)	
+
+#loading plot for 2 factor model	
+plot(fact0$loadings, pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact0$loadings, labels = names(WB2), cex = 0.8)	
+
+
+# Let's look at the correlation matrics (reproduced and residual)	
+
+
+#get reproduced correlation matrix	
+repro1 <- fact1$loadings%*%t(fact1$loadings)	
+#residual correlation matrix	
+resid1 <- fact1$cor - repro1	
+round(resid1, 2)	
+
+#get root-mean squared residuals	
+len <- length(resid1[upper.tri(resid1)])	
+(RMSR1 <- sqrt(sum(resid1[upper.tri(resid1)]^2)/len))	
+
+#get proportion of residuals greater than 0.05 in absolute value	
+paste0(round(sum(rep(1, len)[abs(resid1[upper.tri(resid1)])>0.05])/len*100),"%")	
+
+
+# #### Factor Analysis using PAF with Varimax Rotation	
+
+
+#this uses the fa() function in the psych package.  Note that this fails with only 2 factors	
+fact2 <- fa(WB3, nfactors = 3, rotate = "varimax", fm = "pa")	
+fact2	
+
+
+# Loading plot for first two factors	
+
+
+plot(fact2$loadings[, c(1, 2)], pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact2$loadings[, c(1, 2)], labels = names(WB2), cex = 0.8)	
+
+
+# Correlation matrix analysis	
+
+
+#get reproduced correlation matrix	
+repro2 <- fact2$loadings%*%t(fact2$loadings)	
+#residual correlation matrix	
+resid2 <- cor(WB3)-repro2	
+round(resid2, 2)	
+
+#get root-mean squared residuals - already provided in output actually	
+len <- length(resid2[upper.tri(resid2)])	
+(RMSR2 <- sqrt(sum(resid2[upper.tri(resid2)]^2)/len))	
+
+#get proportion of residuals greater than 0.05 in absolute value	
+paste0(round(sum(rep(1, len)[abs(resid2[upper.tri(resid2)])>0.05])/len*100),"%")	
+
+
+# #### Perform Factor Analysis using iterative PCA with Varimax Rotation	
+
+# Again, we use the fa() function	
+
+
+fact3 <- fa(WB3, nfactors = 3, rotate = "varimax", SMC = FALSE, fm = "pa")	
+fact3	
+
+
+# Loading plot for first two factors.	
+
+
+plot(fact3$loadings, pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact3$loadings, labels = names(WB2), cex = 0.8)	
+
+
+# Correlation Matix Analyses	
+
+
+#get reproduced correlation matrix	
+repro3 <- fact3$loadings%*%t(fact3$loadings)	
+#residual correlation matrix	
+resid3 <- cor(WB3)-repro3	
+round(resid3, 2)	
+
+#get root-mean squared residuals - again, in output above	
+len <- length(resid3[upper.tri(resid3)])	
+RMSR3 <- sqrt(sum(resid3[upper.tri(resid3)]^2)/len)	
+RMSR3	
+
+#get proportion of residuals greater than 0.05 in absolute value	
+paste0(round(sum(rep(1, len)[abs(resid3[upper.tri(resid3)])>0.05])/len*100),"%")	
+
+
+# ####  Get KMO and other measurements (and also PAF again)	
+
+
+fact4 <- paf(as.matrix(WB3))	
+fact4  #LOTS of output here!	
+summary(fact4)	
+
+
